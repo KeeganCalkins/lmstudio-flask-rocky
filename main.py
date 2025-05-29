@@ -1,8 +1,11 @@
+import os
 import lmstudio as lms
-SERVER_API_HOST = "172.22.144.1:1234"
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def chat():
-    with lms.Client(SERVER_API_HOST) as client:
+    with lms.Client(os.getenv("SERVER_API_HOST")) as client:
         model = client.llm.model("gemma-3-12b-it")
 
         # System prompt (will replace with flask output)

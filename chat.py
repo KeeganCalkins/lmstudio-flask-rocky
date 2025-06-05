@@ -37,7 +37,7 @@ def chatOneOut(
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(model_name)
             prediction_stream = model.respond(chat, config=config)
-            return prediction_stream.content   
+            return prediction_stream.content + "\n"
         
             # print()
             # print("Model used:", prediction_stream.model_info.display_name)
@@ -68,7 +68,8 @@ def chatStream(
             model = client.llm.model(model_name)
             prediction_stream = model.respond_stream(chat, config=config)
             for fragment in prediction_stream:
-                yield fragment.content       
+                yield fragment.content 
+            yield "\n"
                 
             # print()
             # print("Model used:", prediction_stream.model_info.display_name)

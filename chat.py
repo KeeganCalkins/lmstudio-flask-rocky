@@ -35,8 +35,11 @@ def chatOneOut(currentRequest: ChatRequest):
 
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
-            prediction_stream = model.respond(chat, config=config)
-            return prediction_stream.content + "\n"
+            
+            assistant_text = model.respond(chat, config=config)
+            chat.add_assistant_response(assistant_text)
+            
+            return assistant_text.content + "\n"
         
             # print()
             # print("Model used:", prediction_stream.model_info.display_name)
@@ -60,15 +63,21 @@ def chatStream(currentRequest: ChatRequest):
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
             prediction_stream = model.respond_stream(chat, config=config)
+            
+            response_fragments = []
             for fragment in prediction_stream:
+                response_fragments.append(fragment.content)
                 yield fragment.content 
             yield "\n"
+        
+        assistant_text = "".join(response_fragments)
+        chat.add_assistant_response(assistant_text)
                 
-            # print()
-            # print("Model used:", prediction_stream.model_info.display_name)
-            # print("Predicted tokens:", prediction_stream.stats.predicted_tokens_count)
-            # print("Time to first token (seconds):", prediction_stream.stats.time_to_first_token_sec)
-            # print("Stop reason:", prediction_stream.stats.stop_reason) 
+        # print()
+        # print("Model used:", prediction_stream.model_info.display_name)
+        # print("Predicted tokens:", prediction_stream.stats.predicted_tokens_count)
+        # print("Time to first token (seconds):", prediction_stream.stats.time_to_first_token_sec)
+        # print("Stop reason:", prediction_stream.stats.stop_reason) 
 
 
 if __name__ == "__main__":

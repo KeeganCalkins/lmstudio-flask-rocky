@@ -1,5 +1,6 @@
 from flask import Flask, request, Response
-from chat import chat
+from chat import ChatRequest
+from chatQueue import queueChat
 
 app = Flask(__name__)
 
@@ -18,15 +19,9 @@ def chat_stream_route():
     system_msg  = data.get("system_message", "")
     user_msg    = data.get("message",        "")
     chat_strm = data.get("stream", False)
+    currentRequest = ChatRequest(system_msg, user_msg, chat_strm)
 
-    result = chat(
-        system_message=system_msg,
-        user_message=user_msg,
-        stream=chat_strm,
-        model_name=data.get("model"),
-        max_tokens=data.get("max_tokens"),
-        temperature=data.get("temperature"),
-    )
+    result = queueChat(currentRequest)
     return Response(result, mimetype="text/plain")
 
 

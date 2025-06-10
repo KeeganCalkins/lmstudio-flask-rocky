@@ -14,7 +14,7 @@ current example input:<br>
            "temperature": 0.7
          }'
 
-> curl -X POST http://localhost:5000/api/chat \   
+> curl -X POST http://localhost:5000/api/chat \
      -H "Content-Type: application/json" \
      -d '{
            "system_message": "You are a helpful assistant.",

@@ -1,7 +1,10 @@
 import os
 import lmstudio as lms
 from dotenv import load_dotenv
+import json
 from dataclasses import dataclass
+from typing import Generator, Union
+from authorizationUtils import ( getSessionHistory, addMessageToSession )
 
 load_dotenv()
 DEFAULT_TEMP=0.6
@@ -15,16 +18,37 @@ class ChatRequest:
     model_name:     str | None = None
     max_tokens:     int | None = None
     temperature:    float    | None = None
+    session_token:  str = None
+    
+@dataclass
+class ChatUsage:
+    model_name:          str
+    predicted_tokens:    int
+    time_to_first_token: float
+    stop_reason:         str
 
 
-def chat(currentRequest: ChatRequest):
+@dataclass
+class ChatResponse:
+    text:  str
+    usage: ChatUsage
+
+
+def chat(currentRequest: ChatRequest) -> Union[ChatResponse, Generator[str, None, ChatUsage]]:
     if not currentRequest.stream:
         return chatOneOut(currentRequest)
     return chatStream(currentRequest)
 
-def chatOneOut(currentRequest: ChatRequest):
-        # System prompt / user prompt
+def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
+        # system prompt / user prompt
         chat = lms.Chat(currentRequest.system_message)
+        # get history from session token
+        for msg in getSessionHistory(currentRequest.session_token):
+            if msg["role"] == "user":
+                chat.add_user_message(msg["content"])
+            else:
+                chat.add_assistant_response(msg["content"])
+            
         chat.add_user_message(currentRequest.user_message)
 
         config = {
@@ -35,23 +59,32 @@ def chatOneOut(currentRequest: ChatRequest):
 
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
-            
             assistant_text = model.respond(chat, config=config)
-            chat.add_assistant_response(assistant_text)
-            
-            return assistant_text.content + "\n"
-        
-            # print()
-            # print("Model used:", prediction_stream.model_info.display_name)
-            # print("Predicted tokens:", prediction_stream.stats.predicted_tokens_count)
-            # print("Time to first token (seconds):", prediction_stream.stats.time_to_first_token_sec)
-            # print("Stop reason:", prediction_stream.stats.stop_reason)
-            
-            
 
-def chatStream(currentRequest: ChatRequest):
+        # adds/replaces message cache
+        addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
+        addMessageToSession(currentRequest.session_token, "assistant", assistant_text.content)
+        
+        stats = assistant_text.stats
+        usage = ChatUsage(
+            model_name          = assistant_text.model_info.display_name,
+            predicted_tokens    = stats.predicted_tokens_count,
+            time_to_first_token = stats.time_to_first_token_sec,
+            stop_reason         = stats.stop_reason,
+        )
+        
+        return ChatResponse(text=assistant_text.content + "\n", usage=usage)
+
+def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
         # System prompt / user prompt
         chat = lms.Chat(currentRequest.system_message)
+        # get history from session token
+        for msg in getSessionHistory(currentRequest.session_token):
+            if msg["role"] == "user":
+                chat.add_user_message(msg["content"])
+            else:
+                chat.add_assistant_response(msg["content"])
+            
         chat.add_user_message(currentRequest.user_message)
 
         config = {
@@ -70,14 +103,21 @@ def chatStream(currentRequest: ChatRequest):
                 yield fragment.content 
             yield "\n"
         
+        # adds/replaces message cache
         assistant_text = "".join(response_fragments)
-        chat.add_assistant_response(assistant_text)
-                
-        # print()
-        # print("Model used:", prediction_stream.model_info.display_name)
-        # print("Predicted tokens:", prediction_stream.stats.predicted_tokens_count)
-        # print("Time to first token (seconds):", prediction_stream.stats.time_to_first_token_sec)
-        # print("Stop reason:", prediction_stream.stats.stop_reason) 
+        addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
+        addMessageToSession(currentRequest.session_token, "assistant", assistant_text)
+        
+        stats = prediction_stream.stats
+        payload = {
+            "session_token":       currentRequest.session_token,
+            "model_name":          prediction_stream.model_info.display_name,
+            "predicted_tokens":    stats.predicted_tokens_count,
+            "time_to_first_token": stats.time_to_first_token_sec,
+            "stop_reason":         stats.stop_reason,
+        }
+        yield json.dumps({"usage": payload}, indent=4) + "\n"
+        # return usage
 
 
 if __name__ == "__main__":

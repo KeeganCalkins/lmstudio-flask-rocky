@@ -24,7 +24,7 @@ def chat_stream_route():
         return Response("Unauthorized", status=401)
     
     client_session_token = request.headers.get("X-Session-Token")
-    session_token = getSessionToken(client_session_token, user["_id"])
+    session_token = getSessionToken(client_session_token)
     # if the token was not valid, return error code 401
     if (session_token == None):
         return Response("Invalid session token", status=401)

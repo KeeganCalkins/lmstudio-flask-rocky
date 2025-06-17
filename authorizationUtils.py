@@ -26,23 +26,21 @@ def validateKey(api_key: str | None) -> dict | None:
     return _USERS.get(api_key)
 
 # gets session token from ChatRequest
-def getSessionToken(token: str | None, user_id: str) -> str:
+def getSessionToken(token: str | None) -> str | None:
     """
     replace with a Mongo query 
     """
-    if token:
-        sess = _SESSIONS.get(token)
-        if sess and sess["user_id"] == user_id:
-            return token
+    if token and token in _SESSIONS:
+        # If token is valid
+        return token
+    else:
         # If token is invalid
-        else:
-            return None
-    # If no token is given
-    return createSessionToken(user_id)
+        return createSessionToken()
+    return None
 # creates and returns session token
-def createSessionToken(user_id):
+def createSessionToken():
     new_token = uuid.uuid4().hex
-    _SESSIONS[new_token] = {"user_id": user_id, "history": []}
+    _SESSIONS[new_token] = { "history": [] }
     return new_token
 
 # stores messages with corresponding roles to session token 

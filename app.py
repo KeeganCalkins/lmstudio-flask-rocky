@@ -1,4 +1,4 @@
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from chat import ChatRequest
 from chatQueue import queueChat
 
@@ -22,8 +22,18 @@ def chat_stream_route():
     currentRequest = ChatRequest(system_msg, user_msg, chat_strm)
 
     result = queueChat(currentRequest)
-    return Response(result, mimetype="text/plain")
-
+    if hasattr(result, '__iter__') and not isinstance(result, (str, bytes)):
+        # Streaming: collect all chunks and return as JSON
+        response_chunks = []
+        session_token = None
+        for chunk in result:
+            if isinstance(chunk, dict):
+                session_token = chunk.get("session_token", session_token)
+                response_chunks.append(chunk.get("response", ""))
+        return jsonify({"session_token": session_token, "response": "".join(response_chunks)})
+    else:
+        # Non-streaming: return as JSON
+        return jsonify(result)
 
 if __name__ == "__main__":
     app.run(debug=True)

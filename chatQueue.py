@@ -1,6 +1,6 @@
 import threading
 import queue
-from chat import ChatRequest, chatOneOut, chatStream
+from chat import ChatRequest, chatOneOut, chatStream, get_or_create_session, get_chat_history
 
 request_queue = queue.Queue()
     
@@ -8,8 +8,11 @@ def runChat():
     while True:
         currentRequest: ChatRequest = request_queue.get()
         try:
+            # Get or create session and chat history
+            session_id = get_or_create_session(currentRequest.session_token, currentRequest.system_message)
+            chat_history = get_chat_history(session_id)
             # not streamed
-            currentRequest._response = chatOneOut(currentRequest)
+            currentRequest._response = chatOneOut(currentRequest, session_id, chat_history)
         except Exception as e:
             currentRequest._response = f"ERROR: {e}"
         finally:

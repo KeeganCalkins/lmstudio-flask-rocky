@@ -8,13 +8,13 @@ current example input:<br>
     -H "X-API-Key: $API_KEY" \
     -d '{
         "messages": [
-                {"role": "system",    "content": "You are chatbot"},
-                {"role": "user",      "content": "How many states"},
-                {"role": "assistant", "content": "there be 50 states"},
-                {"role": "user",      "content": "what did you just say?"}
-            ],
-            "model":  "google/gemma-3-12b",
-            "stream": true
+            {"role": "system",    "content": "You are chatbot"},
+            {"role": "user",      "content": "How many states"},
+            {"role": "assistant", "content": "there be 50 states"},
+            {"role": "user",      "content": "what did you just say?"}
+        ],
+        "model":  "google/gemma-3-12b",
+        "stream": true
     }'
 
 > curl -i -X POST http://localhost:5000/api/chat \
@@ -22,12 +22,12 @@ current example input:<br>
     -H "X-API-Key: $API_KEY" \
     -d '{
         "messages": [
-                {"role": "system",    "content": "You are chatbot"},
-                {"role": "user",      "content": "How many states"},
-                {"role": "assistant", "content": "there be 50 states"},
-                {"role": "user",      "content": "what did you just say?"}
-            ],
-            "model":  "google/gemma-3-12b",
-            "stream": false
+            {"role": "system",    "content": "You are chatbot"},
+            {"role": "user",      "content": "How many states"},
+            {"role": "assistant", "content": "there be 50 states"},
+            {"role": "user",      "content": "what did you just say?"}
+        ],
+        "model":  "google/gemma-3-12b",
+        "stream": false
     }'
 ```

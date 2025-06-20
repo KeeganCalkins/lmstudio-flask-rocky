@@ -14,7 +14,7 @@ current example input:<br>
             {"role": "user",      "content": "what did you just say?"}
         ],
         "model":  "google/gemma-3-12b",
-        "stream": false
+        "stream": true
     }'
 
 > curl -i -X POST http://localhost:5000/api/chat \

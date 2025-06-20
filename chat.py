@@ -1,10 +1,11 @@
 import os
 import lmstudio as lms
+from lmstudio import Chat
 from dotenv import load_dotenv
 import json
 from dataclasses import dataclass
-from typing import Generator, Union
-from authorizationUtils import ( getSessionHistory, addMessageToSession )
+from typing import Generator, Union, List, Dict
+#from authorizationUtils import ( getSessionHistory, addMessageToSession )
 
 load_dotenv()
 DEFAULT_TEMP=0.6
@@ -12,13 +13,12 @@ SERVER_HOST=os.getenv("SERVER_API_HOST")
 
 @dataclass
 class ChatRequest:
-    system_message: str = "You are a resident AI philosopher."
-    user_message:   str = "Answer What is the meaning of life? in 100 words or less."
+    messages: List[Dict[str, str]]
     stream:         bool = False
     model_name:     str | None = None
     max_tokens:     int | None = None
     temperature:    float    | None = None
-    session_token:  str = None
+    #session_token:  str = None
     
 @dataclass
 class ChatUsage:
@@ -40,16 +40,8 @@ def chat(currentRequest: ChatRequest) -> Union[ChatResponse, Generator[str, None
     return chatStream(currentRequest)
 
 def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
-        # system prompt / user prompt
-        chat = lms.Chat(currentRequest.system_message)
-        # get history from session token
-        for msg in getSessionHistory(currentRequest.session_token):
-            if msg["role"] == "user":
-                chat.add_user_message(msg["content"])
-            else:
-                chat.add_assistant_response(msg["content"])
-            
-        chat.add_user_message(currentRequest.user_message)
+        # user manages session messages
+        chat = Chat.from_history({"messages": currentRequest.messages})
 
         config = {
             "temperature": currentRequest.temperature if currentRequest.temperature is not None else DEFAULT_TEMP,
@@ -62,8 +54,8 @@ def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
             assistant_text = model.respond(chat, config=config)
 
         # adds/replaces message cache
-        addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
-        addMessageToSession(currentRequest.session_token, "assistant", assistant_text.content)
+        # addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
+        # addMessageToSession(currentRequest.session_token, "assistant", assistant_text.content)
         
         stats = assistant_text.stats
         usage = ChatUsage(
@@ -76,16 +68,8 @@ def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
         return ChatResponse(text=assistant_text.content + "\n", usage=usage)
 
 def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
-        # System prompt / user prompt
-        chat = lms.Chat(currentRequest.system_message)
-        # get history from session token
-        for msg in getSessionHistory(currentRequest.session_token):
-            if msg["role"] == "user":
-                chat.add_user_message(msg["content"])
-            else:
-                chat.add_assistant_response(msg["content"])
-            
-        chat.add_user_message(currentRequest.user_message)
+        # user manages session messages
+        chat = Chat.from_history({"messages": currentRequest.messages})
 
         config = {
             "temperature": currentRequest.temperature if currentRequest.temperature is not None else DEFAULT_TEMP,
@@ -104,13 +88,13 @@ def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
             yield "\n"
         
         # adds/replaces message cache
-        assistant_text = "".join(response_fragments)
-        addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
-        addMessageToSession(currentRequest.session_token, "assistant", assistant_text)
+        # assistant_text = "".join(response_fragments)
+        # addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
+        # addMessageToSession(currentRequest.session_token, "assistant", assistant_text)
         
         stats = prediction_stream.stats
         payload = {
-            "session_token":       currentRequest.session_token,
+            # "session_token":       currentRequest.session_token,
             "model_name":          prediction_stream.model_info.display_name,
             "predicted_tokens":    stats.predicted_tokens_count,
             "time_to_first_token": stats.time_to_first_token_sec,
@@ -121,11 +105,15 @@ def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
 
 
 if __name__ == "__main__":
-    TEST_STREAM = True
+    TEST_STREAM = False
     TEST_MODEL  = "google/gemma-3-12b"
-    TEST_SYSTEM = "You are a test bot"
-    TEST_USER   = "Tell me a 100-word joke."
-    currentRequest = ChatRequest(TEST_SYSTEM, TEST_USER, TEST_STREAM)
+    TEST_MESSAGES = [
+                        {"role": "system",    "content": "You are chatbot"},
+                        {"role": "user",      "content": "How many states"},
+                        {"role": "assistant", "content": "there be 50 states"},
+                        {"role": "user",      "content": "what?"}
+                    ]
+    currentRequest = ChatRequest(TEST_MESSAGES, TEST_STREAM, TEST_MODEL)
     
     if currentRequest.stream:
         # Streaming 
@@ -136,6 +124,6 @@ if __name__ == "__main__":
         print()
     else:
         # Non-streaming 
-        text = chat(currentRequest)
+        resp = chat(currentRequest)
         print("\n[chat.py] → Non‐streaming result:\n")
-        print(text)
+        print(resp.text)

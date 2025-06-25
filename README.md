@@ -3,9 +3,9 @@ current example input:<br>
 ```
 > python app.py
 
-> curl -N -X POST http://localhost:5000/api/chat
-    -H "Content-Type: application/json"
-    -H "X-API-Key: $API_KEY"
+> curl -N -X POST http://localhost:5000/api/chat \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: $API_KEY" \
     -d '{
         "messages": [
             {"role": "system",    "content": "You are chatbot"},

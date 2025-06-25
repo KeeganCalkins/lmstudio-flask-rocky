@@ -1,26 +1,37 @@
 import os
 import uuid
-
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv()
 
-# dummy api keys for testing
-_USERS = {
-    os.getenv("USER1_API_KEY"): {
-        "_id":     os.getenv("USER1_ID"),
-        "username":os.getenv("USER1_NAME")
-    },
-}
-# check if api key is a valid key
+# Mongo connection
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
+client = MongoClient(MONGO_URI)
+db = client[MONGO_DB_NAME]
+users_collection = db["users"]
+
+# check if api key is valid
 def validateKey(api_key: str | None) -> dict | None:
     """
-    replace with a Mongo query eg.
-        return users.find_one({"api_key": api_key})
+    Checks if the API key exists in the database.
+    Returns the user document if found, else None.
     """
     if not api_key:
         return None
-    return _USERS.get(api_key)
+    user = users_collection.find_one({"api_key": api_key})
+    return user
+
+# testing the function.
+# (maybe) TODO: test scripts instead of hardcoding
+if __name__ == "__main__":
+    test_key = "testkey12345"
+    result = validateKey(test_key)
+    if result:
+        print("API key is valid. User info:", result)
+    else:
+        print("API key is invalid.")
 
 # PROBABLY REMOVED SESSION KEY IMPLEMENTATION
 

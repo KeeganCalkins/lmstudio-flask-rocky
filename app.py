@@ -45,19 +45,16 @@ def chat_stream_route():
     result = queueChat(currentRequest)
     
     if not currentRequest.stream:
-        resp_obj: ChatResponse = result
-        
-        iterable = [(resp_obj.text + "\n").encode("utf-8")]
-        
-        resp = Response(iterable, mimetype="text/plain")
-        # set the session token header
-        # resp.headers["X-Session-Token"]   = session_token
-        
-        resp.headers["X-Model"]           = resp_obj.usage.model_name
-        resp.headers["X-Predicted-Tokens"]= str(resp_obj.usage.predicted_tokens)
-        resp.headers["X-Time-To-First"]   = str(resp_obj.usage.time_to_first_token)
-        
-        return resp
+        if isinstance(result, ChatResponse):
+            body = result.text
+            resp = Response(body, mimetype="text/plain")
+            resp.headers["X-Model"]            = result.usage.model_name
+            resp.headers["X-Predicted-Tokens"] = str(result.usage.predicted_tokens)
+            resp.headers["X-Time-To-First"]    = str(result.usage.time_to_first_token)
+            return resp
+        else:
+            # error in working thread
+            return Response(str(result), status=500, mimetype="text/plain")
     
     # response used for streamed responses
     def generate_bytes():

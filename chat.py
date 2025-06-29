@@ -40,9 +40,6 @@ def chat(currentRequest: ChatRequest) -> Union[ChatResponse, Generator[str, None
     return chatStream(currentRequest)
 
 def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
-        # user manages session messages
-        chat = Chat.from_history({"messages": currentRequest.messages})
-
         config = {
             "temperature": currentRequest.temperature if currentRequest.temperature is not None else DEFAULT_TEMP,
         }
@@ -51,7 +48,7 @@ def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
 
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
-            assistant_text = model.respond(chat, config=config)
+            assistant_text = model.respond({"messages": currentRequest.messages}, config=config)
 
         # adds/replaces message cache
         # addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
@@ -68,9 +65,6 @@ def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
         return ChatResponse(text=assistant_text.content + "\n", usage=usage)
 
 def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
-        # user manages session messages
-        chat = Chat.from_history({"messages": currentRequest.messages})
-
         config = {
             "temperature": currentRequest.temperature if currentRequest.temperature is not None else DEFAULT_TEMP,
         }
@@ -79,7 +73,7 @@ def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
 
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
-            prediction_stream = model.respond_stream(chat, config=config)
+            prediction_stream = model.respond_stream({"messages": currentRequest.messages}, config=config)
             
             response_fragments = []
             for fragment in prediction_stream:

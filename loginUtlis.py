@@ -28,12 +28,28 @@ def remove_user(userID):
     if not isinstance(userID, ObjectId):
         userID = ObjectId(userID)
     try:
-        result = db.users.delete_one({ "_id": userID })
+        user_deleted = db.users.delete_one({ "_id": userID })
+        requests_deleted = remove_access_requests_for_user(userID)
+        keys_deleted     = remove_api_keys_for_user(userID)
     except PyMongoError as e:
         raise RuntimeError(f"Failed to delete user: {e}") from e
-    if result.deleted_count == 0:
+    if user_deleted.deleted_count == 0:
         raise ValueError(f"No user found with email {email!r}")
-    return { "deleted_count": result.deleted_count }
+    return {
+        "deleted_user":       user_deleted.deleted_count,
+        "deleted_requests":   requests_deleted,
+        "deleted_api_keys":   keys_deleted
+    }
+
+""" 
+Helper functions for the remove user function
+"""
+# delete pending accessRequest for user
+def remove_access_requests_for_user(user_id):
+    return db.accessRequests.delete_many({"userID": user_id}).deleted_count
+# delete api_keys for user
+def remove_api_keys_for_user(user_id):
+    return db.APIkeys.delete_many({"userID": user_id}).deleted_count
 
 # add accessRequest with users' _id as userID and email
 def request_access(userID):

@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
+from datetime import datetime
 
 load_dotenv()
 
@@ -14,12 +15,25 @@ client = MongoClient(MONGO_URI)
 db = client[MONGO_DB_NAME]
 
 # add user to users collection with unique email
-def register_user(doc):
+def register_user(userJson):
     try:
-        result = db.users.insert_one(doc)
+        result = db.users.insert_one(userJson)
         return {"_id": result.inserted_id}
     except DuplicateKeyError as e:
-        raise ValueError("That email is already registered") from e
+        raise ValueError("A user with that email is already registered") from e
+
+# remove user using email as key
+def remove_user(userID):
+    # ensure userID is of ObjectId
+    if not isinstance(userID, ObjectId):
+        userID = ObjectId(userID)
+    try:
+        result = db.users.delete_one({ "_id": userID })
+    except PyMongoError as e:
+        raise RuntimeError(f"Failed to delete user: {e}") from e
+    if result.deleted_count == 0:
+        raise ValueError(f"No user found with email {email!r}")
+    return { "deleted_count": result.deleted_count }
 
 # add accessRequest with users' _id as userID and email
 def request_access(userID):
@@ -77,6 +91,34 @@ def accept_access(userID):
         "updated_count": update_result.modified_count,
         "deleted_count": delete_result.deleted_count
     }
+    
+def generate_api_key(userID):
+    # ensure userID is of ObjectId
+    if not isinstance(userID, ObjectId):
+        userID = ObjectId(userID)
+    
+    # check if user has access to API keys / exists
+    user = db.users.find_one({ "_id": userID }, { "hasAccess": 1 })
+    if not user:
+        raise ValueError(f"No user found with ID {userID!r}")
+    if not user.get("hasAccess", False):
+        raise PermissionError("User does not have access and cannot be issued an API key")
+    
+    # delete APIkey entry before creating 
+    db.APIkeys.delete_one({"userID": userID})
+    
+    now = datetime.utcnow()
+    new_key = {
+        "userID":    userID,
+        "createdOn": now,
+        "updatedOn": now
+    }
+    try:
+        result = db.APIkeys.insert_one(new_key)
+        return str(result.inserted_id)
+    except PyMongoError as e:
+        raise RuntimeError(f"Failed to create API key: {e}") from e
+        
 
 if __name__ == "__main__":
     while(True):
@@ -87,9 +129,11 @@ if __name__ == "__main__":
             3) deny access
             4) accept access
             5) flush entries
+            6) remove user
+            7) generate key for user
             q) Exit
         """)
-        choice = input("Enter 1–5/q: ").strip()
+        choice = input("Enter 1–7/q: ").strip()
         
         if choice == "1":
             doc = {
@@ -139,9 +183,26 @@ if __name__ == "__main__":
             print("attempting to delete all entries...")
             users_result    = db.users.delete_many({})
             requests_result = db.accessRequests.delete_many({})
+            keys_result = db.APIkeys.delete_many({})
 
             print(f"  • Deleted {users_result.deleted_count} user documents")
             print(f"  • Deleted {requests_result.deleted_count} access request documents")
+            print(f"  • Deleted {keys_result.deleted_count} API keys")
+        
+        elif choice == "6":
+            print("attempting to remove user...")
+            new_user = db.users.find_one({ "email": "emailtest@kent.edu" })
+            result = remove_user(new_user["_id"])
+            
+            print(result)
+            
+        elif choice == "7":
+            print("attempting to generate key...")
+            new_user = db.users.find_one({ "email": "emailtest@kent.edu" })
+            result = generate_api_key(new_user["_id"])
+            
+            key = db.APIkeys.find_one({ "userID": new_user["_id"] })
+            print(key)
         
         elif choice == "q":
             print("exiting...")

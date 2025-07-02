@@ -1,3 +1,15 @@
+# frontend project setup
+```
+npm install -g @vue/cli
+```
+cd frontend
+```
+npm install vue-router@4
+```
+npm run serve
+```
+
+
 # lmstudio-flask-test
 current example input:<br>
 ```

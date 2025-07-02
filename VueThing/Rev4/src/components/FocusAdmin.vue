@@ -1,25 +1,28 @@
 <script>
 import ManUser from "./ManUser.vue"
 import ManKey from "./ManKey.vue"
+import {menuMode} from "../stores/menuMode.js"
   export default {
     components: {
       ManUser,
       ManKey
     },
+    computed: {
+      menuMode() {
+        return menuMode
+      }
+    },
     data() {
       return {
         activeComp: "ManUser",
       }
-    },
-      methods: {
-
     }
 }
 </script>
 
 <template>
    <div id="focusAdmin"> 
-    <component :is="activeComp"></component>
+    <component :is="menuMode.getMode()"></component>
   </div>
 </template>
 

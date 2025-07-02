@@ -1,9 +1,9 @@
 <template>
     <div id="bar">
-        <button id="menuButton">
+        <button id="menuButton" @click="menuMode.setMode('ManUser')">
             User
         </button>
-        <button id="menuButton">
+        <button id="menuButton" @click="menuMode.setMode('ManKey')">
             Key
         </button>
         <button id="menuButton">
@@ -16,15 +16,13 @@
 </template>
 
 <script>
+import {menuMode} from "../stores/menuMode.js"
   export default {
-    data() {
-      return {
-
-      }
+    computed: {
+        menuMode() {
+            return menuMode
+        }
     },
-  methods: {
-
-  }
 }
 </script>
 

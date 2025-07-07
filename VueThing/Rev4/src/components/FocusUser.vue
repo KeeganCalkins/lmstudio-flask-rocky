@@ -1,21 +1,28 @@
 <template>
     <div id="focusUser">
-        <h2 v-if="!hasAccess">Request Access</h2>
-        <button id="request" v-if="!hasAccess" @click="requestAPIAccess">
-            <b>Request Access</b>
-        </button>
+        <template v-if="!hasAccess">
+            <h2 v-if="!isPending">Request Access</h2>
+            <button id="request" v-if="!isPending" @click="requestAPIAccess">
+                <b>Request Access</b>
+            </button>
+            <h2 v-else>Waiting for access…</h2>
+        </template>
 
-        <h2 v-if="hasAccess && !isKey">No API Key Found</h2>
-        <button id="request" v-if="hasAccess && !isKey" @click="generateNewKey">
-            <b>Generate Key</b>
-        </button>
+        <template v-else-if="hasAccess && !isKey">
+            <h2>No API Key Found</h2>
+            <button id="request" @click="generateNewKey">
+                <b>Generate Key</b>
+            </button>
+        </template>
 
-        <h3 v-if="isKey">Key:</h3>
-        <input v-if="isKey" :value="key" readonly>
-        <p></p>
-        <button id="request" v-if="isKey" @click="generateNewKey">
-            <b>Another?</b>
-        </button>
+        <template v-else>
+            <h3>Key:</h3>
+            <input :value="key" readonly>
+            <p></p>
+            <button id="request" @click="generateNewKey">
+                <b>Another?</b>
+            </button>
+        </template>
 
     </div>
 </template>
@@ -27,41 +34,45 @@ export default {
             isKey: false,
             key: null,
             hasAccess: false,
-            userId: 'PASTE TEST USER ID',
+            isPending: false,
+            userId: '686b65e07c314d3ef59113fc',
         }
     },
-    mounted() {
-        this.fetchUserAccessStatus();
+    async mounted() {
+        await this.fetchUserAccessStatus();
     },
     methods: {
-        fetchUserAccessStatus() {
-        fetch(`/api/users/${this.userId}`)
-            .then(res => res.json())
-            .then(data => {
-            this.hasAccess = data.hasAccess;
+        async fetchUserAccessStatus() {
+            try {
+                const resUser = await fetch(`/api/users/${this.userId}`);
+                const dataUser = await resUser.json();
+                this.hasAccess = dataUser.hasAccess;
+
+                const resPending = await fetch(`/api/users/${this.userId}/access/pending`);
+                const dataPending = await resPending.json();
+                this.isPending = dataPending.pending;
+
                 if (this.hasAccess) {
-                    this.fetchExistingKey();
-                }
-            })
-            .catch(err => console.error("Failed to get user:", err));
+                    await this.fetchExistingKey();
+               }
+            } catch (err) {
+                console.error("Error fetching user status:", err);
+            }
         },
-        requestAPIAccess() {
-            fetch(`/api/users/${this.userId}/access`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            })
-            .then(res => {
+        async requestAPIAccess() {
+            try {
+                const res = await fetch(`/api/users/${this.userId}/access`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                });
                 if (!res.ok) throw new Error("Access request failed");
-                return res.json();
-            })
-            .catch(err => {
+                this.isPending = true;
+            } catch (err) {
                 console.error("API error:", err);
-                alert("Could not request access, you probably already have");
-            });
+                alert("Could not request access, issue with account log-in");
+            }
         },
-        fetchExistingKey() {
+        async fetchExistingKey() {
             fetch(`/api/users/${this.userId}/apikey`)
             .then(res => res.json())
             .then(data => {

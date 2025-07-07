@@ -133,6 +133,19 @@ def api_request_access(user_id):
         return jsonify({"error": str(e)}), 400
     except PyMongoError as e:
         return jsonify({"error": "DB error: " + str(e)}), 500
+
+# Used to check if request is pending
+@app.route("/api/users/<user_id>/access/pending", methods=["GET"])
+def access_pending(user_id):
+    try:
+        oid = ObjectId(user_id)
+        # See if there is a request in the accessRequests collection
+        pending = db.accessRequests.find_one({"userID": oid}) is not None
+        return jsonify({"pending": pending}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
     
 # Deny access request
 @app.route("/api/users/<user_id>/access", methods=["DELETE"])

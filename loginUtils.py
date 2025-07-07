@@ -34,7 +34,7 @@ def remove_user(userID):
     except PyMongoError as e:
         raise RuntimeError(f"Failed to delete user: {e}") from e
     if user_deleted.deleted_count == 0:
-        raise ValueError(f"No user found with email {email!r}")
+        raise ValueError(f"No user found with _id {userID!r}")
     return {
         "deleted_user":       user_deleted.deleted_count,
         "deleted_requests":   requests_deleted,
@@ -114,10 +114,13 @@ def generate_api_key(userID):
         userID = ObjectId(userID)
     
     # check if user has access to API keys / exists
-    user = db.users.find_one({ "_id": userID }, { "hasAccess": 1 })
+    user = db.users.find_one(
+        { "_id": userID },
+        { "hasAccess": 1, "isAdmin": 1 }
+    )
     if not user:
         raise ValueError(f"No user found with ID {userID!r}")
-    if not user.get("hasAccess", False):
+    if not (user.get("isAdmin", False) or user.get("hasAccess", False)):
         raise PermissionError("User does not have access and cannot be issued an API key")
     
     # delete APIkey entry before creating 

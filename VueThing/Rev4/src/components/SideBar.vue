@@ -6,11 +6,8 @@
         <button id="menuButton" @click="menuMode.setMode('ManKey')">
             Key
         </button>
-        <button id="menuButton">
-            Set
-        </button>
-        <button id="menuButton">
-            Quit
+        <button id="menuButton" @click="menuMode.setMode('ManRequests')">
+            Requests
         </button>
     </div>
 </template>
@@ -38,13 +35,13 @@ import {menuMode} from "../stores/menuMode.js"
 }
 
 #menuButton {
-  height: 40px;
-  width: 40px;
-  border-radius: 10px;
-  color: #efab00;
-  background: #003976;
-  border-color: #efab00;
-  margin: 30px;
-  position: inherit
+    height: 40px;
+    width: 40px;
+    border-radius: 10px;
+    color: #efab00;
+    background: #003976;
+    border-color: #efab00;
+    margin: 30px;
+    position: inherit
 }
 </style>

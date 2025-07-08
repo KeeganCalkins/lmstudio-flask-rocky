@@ -16,6 +16,8 @@ db = client[MONGO_DB_NAME]
 
 # add user to users collection with unique email
 def register_user(userJson):
+    if userJson.get("isAdmin", False):
+        userJson["hasAccess"] = True
     try:
         result = db.users.insert_one(userJson)
         return {"_id": result.inserted_id}

@@ -1,5 +1,6 @@
 <template>
     <div id="bar">
+        <h3 style="margin-left: 1rem; color: goldenrod">Manage</h3>
         <button id="menuButton" @click="menuMode.setMode('ManUser')">
             User
         </button>

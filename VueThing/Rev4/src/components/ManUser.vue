@@ -79,7 +79,7 @@
     .user-entry {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
         font-size: 13px;
         padding: 4px 0;
         border-bottom: 1px solid #444;
@@ -91,13 +91,18 @@
         text-overflow: ellipsis;
         max-width: 80%;
     }
+    .user-line small {
+        display: block;
+        margin: 4px 0 0 0;
+        text-align: left;
+    }
 
     #list {
         overflow-y: auto;
-        max-height: 250px;           /* prevent it from overflowing down */
-        width: 100%;                 /* use all available width */
+        max-height: 250px;
+        width: 100%;
         background: #002f61;
-        margin: 10px auto 0 auto;    /* centered with top spacing */
+        margin: 10px auto 0 auto;
         padding: 10px;
         border-radius: 5px;
         color: white;

@@ -35,7 +35,7 @@ export default {
             key: null,
             hasAccess: false,
             isPending: false,
-            userId: '686b65e07c314d3ef59113fc',
+            userId: localStorage.getItem('currentUserId') || 'PasteTestID',
         }
     },
     async mounted() {

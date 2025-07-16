@@ -2,10 +2,10 @@
     <div id="bar">
         <h3 style="margin-left: 1rem; color: goldenrod">Manage</h3>
         <button id="menuButton" @click="menuMode.setMode('ManUser')">
-            User
+            Users
         </button>
         <button id="menuButton" @click="menuMode.setMode('ManKey')">
-            Key
+            Keys
         </button>
         <button id="menuButton" @click="menuMode.setMode('ManRequests')">
             Requests
@@ -36,13 +36,13 @@ import {menuMode} from "../stores/menuMode.js"
 }
 
 #menuButton {
-    height: 40px;
-    width: 40px;
+    height: 50px;
+    width: 50px;
     border-radius: 10px;
     color: #efab00;
     background: #003976;
     border-color: #efab00;
-    margin: 30px;
+    margin: 20px;
     position: inherit
 }
 </style>

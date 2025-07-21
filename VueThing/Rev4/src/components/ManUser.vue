@@ -5,57 +5,67 @@
         </div>
 
         <div id="list">
-            <div v-if="users.length === 0">No users found.</div>
-            <div v-for="user in users" :key="user._id" class="user-entry">
-                <span class="user-line">
-                    {{ user.firstName }} {{ user.lastName }} — CRN: {{ user.CRN }}, Course: {{ user.courseID }} ({{ user.term }}) — Access: 
-                    <strong>{{ user.hasAccess ? "Yes" : "No" }}</strong>
-                    <br>
-                    <small>{{ user.email }}</small>
-                    
-                </span>
-                <button @click="removeUser(user._id)">DELETE USER</button>
+            <div v-if="loading">Loading...</div>
+            <div v-else-if="users.length === 0">No users found.</div>
+            <div v-else>
+                <div v-for="user in users" :key="user._id" class="user-entry">
+                    <span class="user-line">
+                        {{ user.firstName }} {{ user.lastName }} — CRN: {{ user.CRN }}, Course: {{ user.courseID }} ({{ user.term }}) — Access: 
+                        <strong>{{ user.hasAccess ? "Yes" : "No" }}</strong>
+                        <br>
+                        <small>{{ user.email }}</small>
+                        
+                    </span>
+                    <button @click="removeUser(user._id)">DELETE USER</button>
+                </div>
             </div>
         </div>
     </div>
 </template>
 <script>
+import { authFetch } from '@/authFetch.js';
+
     export default {
         data() {
             return {
-            users: [],
+                users: [],
+                loading: true,
             };
         },
         mounted() {
             this.fetchUsers();
         },
         methods: {
-            fetchUsers() {
-                fetch('/api/users')
-                    .then(res => res.json())
-                    .then(data => {
-                        this.users = data;
-                    })
-                    .catch(err => {
-                        console.error("Failed to fetch users:", err);
-                    });
+            async fetchUsers() {
+                try {
+                    const res = await authFetch('/api/users');
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'Failed to fetch users');
+                    }
+                    this.users = await res.json();
+                    this.loading = false;
+                } catch (err) {
+                    console.error('Failed to fetch users:', err);
+                }
             },
-            removeUser(userId) {
-                if (!confirm("Are you sure you want to remove this user?")) return;
-
-                fetch(`/api/users/${userId}`, {
-                    method: "DELETE",
-                })
-                    .then(res => res.json())
-                    .then(() => {
-                        // Refresh the user list 
-                        this.fetchUsers();
-                    })
-                    .catch(err => {
-                        console.error("Failed to remove user:", err);
-                        alert("Could not remove user.");
+            async removeUser(userId) {
+                if (!confirm('Are you sure you want to remove this user?')) return;
+                try {
+                    const res = await authFetch(`/api/users/${userId}`, {
+                        method: 'DELETE'
                     });
-            },
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'Could not remove user');
+                    }
+                    // Refresh the user list
+                    await this.fetchUsers();
+                } catch (err) {
+                    console.error('Failed to remove user:', err);
+                    alert('Could not remove user: ' + err.message);
+                }
+            }
         },
     };
 </script>

@@ -23,6 +23,8 @@
 </template>
 
 <script>
+import { authFetch } from '@/authFetch.js';
+
 export default {
     data() {
         return {
@@ -34,33 +36,50 @@ export default {
             this.fetchRequests();
     },
     methods: {
-        fetchRequests() {
-            fetch("/api/access-requests")
-                .then(res => res.json())
-                .then(data => {
-                    this.requests = data;
-                    this.loading = false;
+        async fetchRequests() {
+            this.loading = true;
+            try {
+                const res = await authFetch('/api/access-requests');
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Failed to fetch requests');
+                }
+                this.requests = await res.json();
+            } catch (err) {
+                console.error('Failed to fetch requests:', err);
+            } finally {
+                this.loading = false;
+            }
+        },
+        async accept(userId) {
+            try {
+                const res = await authFetch(`/api/users/${userId}/access/accept`, {
+                    method: 'POST'
                 })
-                .catch(err => {
-                    console.error("Failed to fetch requests:", err);
-                    this.loading = false;
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Accept failed');
+                }
+                await this.fetchRequests();
+            } catch (err) {
+                console.error('Accept failed:', err);
+            }
+        },
+        async deny(userId) {
+            try {
+                const res = await authFetch(`/api/users/${userId}/access`, {
+                    method: 'DELETE'
                 });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Deny failed');
+                }
+                await this.fetchRequests();
+            } catch (err) {
+                console.error('Deny failed:', err);
+            }
         },
-        accept(userId) {
-            fetch(`/api/users/${userId}/access/accept`, {
-                method: "POST",
-            })
-                .then(() => this.fetchRequests())
-                .catch(err => console.error("Accept failed:", err));
-        },
-        deny(userId) {
-            fetch(`/api/users/${userId}/access`, {
-                method: "DELETE",
-            })
-                .then(() => this.fetchRequests())
-                .catch(err => console.error("Deny failed:", err));
-            },
-        },
+    }
 };
 </script>
 

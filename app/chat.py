@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import json
 from dataclasses import dataclass
 from typing import Generator, Union, List, Dict
-#from authorizationUtils import ( getSessionHistory, addMessageToSession )
 
 load_dotenv()
 DEFAULT_TEMP=0.6
@@ -18,7 +17,6 @@ class ChatRequest:
     model_name:     str | None = None
     max_tokens:     int | None = None
     temperature:    float    | None = None
-    #session_token:  str = None
     
 @dataclass
 class ChatUsage:
@@ -49,10 +47,6 @@ def chatOneOut(currentRequest: ChatRequest) -> ChatResponse:
         with lms.Client(SERVER_HOST) as client:
             model = client.llm.model(currentRequest.model_name)
             assistant_text = model.respond({"messages": currentRequest.messages}, config=config)
-
-        # adds/replaces message cache
-        # addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
-        # addMessageToSession(currentRequest.session_token, "assistant", assistant_text.content)
         
         stats = assistant_text.stats
         usage = ChatUsage(
@@ -81,14 +75,8 @@ def chatStream(currentRequest: ChatRequest) -> Generator[str, None, ChatUsage]:
                 yield fragment.content 
             yield "\n"
         
-        # adds/replaces message cache
-        # assistant_text = "".join(response_fragments)
-        # addMessageToSession(currentRequest.session_token, "user", currentRequest.user_message)
-        # addMessageToSession(currentRequest.session_token, "assistant", assistant_text)
-        
         stats = prediction_stream.stats
         payload = {
-            # "session_token":       currentRequest.session_token,
             "model_name":          prediction_stream.model_info.display_name,
             "predicted_tokens":    stats.predicted_tokens_count,
             "time_to_first_token": stats.time_to_first_token_sec,

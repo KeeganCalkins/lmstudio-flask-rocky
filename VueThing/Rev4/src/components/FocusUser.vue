@@ -1,10 +1,57 @@
 <template>
     <div id="focusUser">
-        <template v-if="!hasAccess">
+        <div v-if="loading">Loading...</div>
+
+        <template v-else-if="!hasAccess">
             <h2 v-if="!isPending">Request Access</h2>
-            <button id="request" v-if="!isPending" @click="requestAPIAccess">
-                <b>Request Access</b>
-            </button>
+            <div v-if="!isPending">
+                <h4>Course Information</h4>
+                <p class="hint">Which course(s) do you need this for?</p>
+
+                <div
+                    v-for="(c, idx) in courses"
+                    :key="idx"
+                    class="course-row"
+                >
+                    <input
+                        v-model="c.CRN"
+                        placeholder="CRN"
+                        required
+                    />
+                    <input
+                        v-model="c.courseID"
+                        placeholder="Course ID (e.g. CS101)"
+                        required
+                    />
+                    <input
+                        v-model="c.term"
+                        placeholder="Term (e.g. Fall2025)"
+                        required
+                    />
+                    <button
+                        type="button"
+                        @click="removeCourse(idx)"
+                        v-if="courses.length > 1"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <button 
+                    id="add-course" 
+                    type="button" 
+                    @click="addCourse"
+                    v-if="courses.length < 3"
+                >
+                    + Add Course
+                </button>
+
+                <br />
+
+                <button id="request" @click="requestAPIAccess">
+                    <b>Request Access</b>
+                </button>
+            </div>
             <h2 v-else>Waiting for access…</h2>
         </template>
 
@@ -28,6 +75,8 @@
 </template>
 
 <script>
+import { authFetch } from '@/authFetch.js';
+
 export default {
     data() {
         return {
@@ -35,73 +84,110 @@ export default {
             key: null,
             hasAccess: false,
             isPending: false,
-            userId: localStorage.getItem('currentUserId') || 'PasteTestID',
+            userId: null,
+            loading: true,
+            courses: [
+                {
+                    CRN: '',
+                    courseID: '',
+                    term: ''
+                }
+            ]
         }
     },
     async mounted() {
         await this.fetchUserAccessStatus();
     },
     methods: {
+        addCourse() {
+            if (this.courses.length < 3) {
+                this.courses.push({ CRN: '', courseID: '', term: '' });
+            }
+        },
+        removeCourse(idx) {
+            this.courses.splice(idx, 1);
+        },
         async fetchUserAccessStatus() {
             try {
-                const resUser = await fetch(`/api/users/${this.userId}`);
+                const resUser = await authFetch(`/api/me`);
+                if (!resUser.ok) throw new Error("Not signed in");
                 const dataUser = await resUser.json();
+                
+                // get user id and hasAccess flag
+                this.userId = dataUser._id;
                 this.hasAccess = dataUser.hasAccess;
 
-                const resPending = await fetch(`/api/users/${this.userId}/access/pending`);
+                const resPending = await authFetch(`/api/users/${this.userId}/access/pending`);
+                if (!resPending.ok) throw new Error("Pending check failed");
                 const dataPending = await resPending.json();
                 this.isPending = dataPending.pending;
 
                 if (this.hasAccess) {
                     await this.fetchExistingKey();
-               }
+                }
+                this.loading = false;
             } catch (err) {
                 console.error("Error fetching user status:", err);
             }
         },
         async requestAPIAccess() {
             try {
-                const res = await fetch(`/api/users/${this.userId}/access`, {
+                if (
+                    this.courses.length === 0 ||
+                    this.courses.some(
+                        c => !c.CRN.trim() || !c.courseID.trim() || !c.term.trim()
+                    )
+                ) {
+                    alert('Please fill all course fields (CRN, Course ID, Term).');
+                    return;
+                }
+                const res = await authFetch(`/api/users/${this.userId}/access`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" }
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ courses: this.courses })
                 });
-                if (!res.ok) throw new Error("Access request failed");
+                if (!res.ok) { 
+                    const err = await res.json();
+                    throw new Error(err.error || "Access request failed");
+                }
                 this.isPending = true;
             } catch (err) {
                 console.error("API error:", err);
-                alert("Could not request access, issue with account log-in");
+                alert("Could not request access: " + err.message);
             }
         },
         async fetchExistingKey() {
-            fetch(`/api/users/${this.userId}/apikey`)
-            .then(res => res.json())
-            .then(data => {
+            try {
+                const res = await authFetch(`/api/users/${this.userId}/apikey`);
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Failed to fetch API key');
+                }
+                    const data = await res.json();
                 if (data.api_key) {
-                    this.key = data.api_key;
+                    this.key   = data.api_key;
                     this.isKey = true;
                 }
-            })
-            .catch(err => console.error("Failed to fetch API key:", err));
+            } catch (err) {
+                console.error('Failed to fetch API key:', err);
+            }
         },
-        generateNewKey() {
-            fetch(`/api/users/${this.userId}/apikey`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
+        async generateNewKey() {
+            try {
+                const res = await authFetch(`/api/users/${this.userId}/apikey`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Key request failed');
                 }
-            })
-            .then(res => {
-                if (!res.ok) throw new Error("Key request failed");
-                return res.json();
-            })
-            .then(data => {
-                this.key = data.api_key;
+                const data = await res.json();
+                this.key   = data.api_key;
                 this.isKey = true;
-            })
-            .catch(err => {
-                console.error("API error:", err);
-                alert("Could not generate key");
-            });
+            } catch (err) {
+                console.error('API error:', err);
+                alert('Could not generate key: ' + err.message);
+            }
         },
     }
 }
@@ -110,12 +196,34 @@ export default {
 <style scoped>
 #request {
     height: 40px;
-    width: 100px;
+    width: 140px;
     color: #efab00;
     background: #003976;
     border-color: #efab00;
     border-width: 4px;
     border-radius: 20px;
+    margin-top: 10px;
+}
+
+#add-course {
+    margin-top: 6px;
+    background: #225b9e;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+.course-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.course-row input {
+    flex: 1;
+}
+.hint {
+    font-size: 12px;
+    color: #ccc;
 }
 </style>
 

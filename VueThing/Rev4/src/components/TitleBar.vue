@@ -1,9 +1,13 @@
 <script>
-import {admin} from "../stores/admin.js"
 export default {
+    data() {
+        return {
+            isLoggedIn: false
+        }
+    },
     computed: {
-        admin() {
-            return admin
+        authButtonText() {
+            return this.isLoggedIn ? 'Log Out' : 'Log In'
         }
     }
 }

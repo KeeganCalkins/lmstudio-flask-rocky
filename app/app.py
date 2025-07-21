@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Response, stream_with_context
+from flask import Flask, request, jsonify, Response, stream_with_context, g
 from loginUtils import (
     register_user,
     request_access,
@@ -15,6 +15,8 @@ from loginUtils import db
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 
+from auth import token_required, admin_required
+
 app = Flask(__name__)
 
 @app.route("/")
@@ -29,6 +31,8 @@ def homepage():
 
 # Get all users info
 @app.route("/api/users", methods=["GET"])
+@token_required
+@admin_required
 def list_users():
     try:
         users = list(db.users.find({}, {
@@ -54,6 +58,8 @@ def list_users():
 
 # Get all access requests
 @app.route("/api/access-requests", methods=["GET"])
+@token_required
+@admin_required
 def list_access_requests():
     try:
         requests = list(db.accessRequests.find())
@@ -81,6 +87,8 @@ def list_access_requests():
 
 # Get user info
 @app.route("/api/users/<user_id>", methods=["GET"])
+@token_required
+@admin_required
 def get_user(user_id):
     try:
         oid = ObjectId(user_id)
@@ -94,11 +102,53 @@ def get_user(user_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/me", methods=["GET"])
+@token_required
+def api_get_me():
+    claims = g.user_claims
+    try:
+        me = db.users.find_one(
+            { "azureOID": claims["oid"] },
+            { "_id":1, "email":1, "hasAccess":1, "isAdmin":1, "courseInfo":1 }
+        )
+        if not me:
+            return jsonify({"error":"Not found"}), 404
+        me["_id"] = str(me["_id"])
+        return jsonify(me)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 # Create new user
 @app.route("/api/users", methods=["POST"])
+@token_required
 def api_register_user():
+    oid   = g.user_claims["oid"]
+    payload = request.get_json() or {}
+    email   = payload.get("email")
+    if not email:
+        return jsonify({"error":"No email provided"}), 400
+    
+    user_json = payload
+    user_json.update({
+        "azureOID": oid,
+        "email":    email,
+        "hasAccess": False,
+        "isAdmin":   False,
+    })
+        
+    if not user_json.get("courseInfo"):
+        user_json["courseInfo"] = [{
+        "CRN":      "TBD",
+        "courseID": "TBD",
+        "term":     "TBD"
+        }]
+        
+    existing = db.users.find_one({"azureOID": oid})
+    if existing:
+        return jsonify({"_id": str(existing["_id"]) }), 200
     try:
-        user_json = request.get_json()
         out = register_user(user_json)
         # turn ObjectId to string
         out["_id"] = str(out["_id"])
@@ -110,6 +160,8 @@ def api_register_user():
 
 # Delete user
 @app.route("/api/users/<user_id>", methods=["DELETE"])
+@token_required
+@admin_required
 def api_remove_user(user_id):
     try:
         # validate ObjectId type
@@ -123,9 +175,19 @@ def api_remove_user(user_id):
     
 # Request access
 @app.route("/api/users/<user_id>/access", methods=["POST"])
+@token_required
 def api_request_access(user_id):
     try:
         oid = ObjectId(user_id)
+        payload = request.get_json() or {}
+        courses = payload.get("courses")
+        
+        if courses and isinstance(courses, list):
+            db.users.update_one(
+                {"_id": oid},
+                {"$set": {"courseInfo": courses}}
+            )
+        
         out = request_access(oid)
         out["_id"] = str(out["_id"])
         return jsonify(out), 201
@@ -136,6 +198,7 @@ def api_request_access(user_id):
 
 # Used to check if request is pending
 @app.route("/api/users/<user_id>/access/pending", methods=["GET"])
+@token_required
 def access_pending(user_id):
     try:
         oid = ObjectId(user_id)
@@ -149,6 +212,8 @@ def access_pending(user_id):
     
 # Deny access request
 @app.route("/api/users/<user_id>/access", methods=["DELETE"])
+@token_required
+@admin_required
 def api_deny_access(user_id):
     try:
         oid = ObjectId(user_id)
@@ -161,6 +226,8 @@ def api_deny_access(user_id):
     
 # Accept access request
 @app.route("/api/users/<user_id>/access/accept", methods=["POST"])
+@token_required
+@admin_required
 def api_accept_access(user_id):
     try:
         oid = ObjectId(user_id)
@@ -172,6 +239,7 @@ def api_accept_access(user_id):
         return jsonify({"error": "DB error: " + str(e)}), 500
 
 @app.route("/api/users/<user_id>/apikey", methods=["GET"])
+@token_required
 def get_api_key(user_id):
     try:
         oid = ObjectId(user_id)
@@ -186,10 +254,23 @@ def get_api_key(user_id):
 
 # Generate / rotate API key
 @app.route("/api/users/<user_id>/apikey", methods=["POST"])
+@token_required
 def api_generate_api_key(user_id):
+    claims = g.user_claims
+    oid   = claims["oid"]
+    me = db.users.find_one({ "azureOID": oid }, {"_id":1, "isAdmin":1})
+    if not me:
+        return jsonify({"error":"User not found"}), 404
+    if not (me.get("isAdmin") or str(me["_id"]) == user_id):
+        return jsonify({"error":"Forbidden"}), 403
+    
     try:
-        oid = ObjectId(user_id)
-        new_key = generate_api_key(oid)
+        target_oid = ObjectId(user_id)
+    except:
+        return jsonify({"error":"Invalid user_id"}), 400
+    
+    try:
+        new_key = generate_api_key(target_oid)
         return jsonify({"api_key": new_key}), 201
     except (ValueError, PermissionError) as e:
         return jsonify({"error": str(e)}), 403
@@ -206,21 +287,13 @@ def chat_stream_route():
     if user is None:
         return Response("Unauthorized", status=401)
     
-    # client_session_token = request.headers.get("X-Session-Token")
-    # session_token = getSessionToken(client_session_token)
-    # # if the token was not valid, return error code 401
-    # if (session_token == None):
-    #     return Response("Invalid session token", status=401)
-    
     data = request.get_json() or {}
-    # msgs = data.get("messages", [])
     currentRequest = ChatRequest(
         messages       = data.get("messages", []),
         stream         = data.get("stream", False),
         model_name     = data.get("model"),
         max_tokens     = data.get("max_tokens"),
         temperature    = data.get("temperature"),
-        #session_token  = session_token,
     )
     
     result = queueChat(currentRequest)
@@ -247,8 +320,19 @@ def chat_stream_route():
         content_type="application/x-ndjson",
         direct_passthrough=True
     )
-    # resp.headers["X-Session-Token"] = session_token
     return resp
+
+@app.errorhandler(401)
+def unauthorized(e):
+    return jsonify({"error":"Unauthorized"}), 401
+
+@app.errorhandler(403)
+def forbidden(e):
+    return jsonify({"error":"Forbidden"}), 403
+
+@app.route("/api/hello")
+def hello():
+    return "🐶 hello from Flask", 200
 
 if __name__ == "__main__":
     app.run(debug=True)

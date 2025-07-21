@@ -5,23 +5,30 @@
         </div>
 
         <div id="list">
-            <div v-if="users.length === 0">No users with access found.</div>
-            <div v-for="user in users" :key="user._id" class="user-entry">
-                <span class="user-line">
-                    {{ user.firstName }} {{ user.lastName }} ({{ user.email }})
-                    <span v-if="user.apiKey"> — Key: {{ user.apiKey }}</span>
-                </span>
-                <button @click="generateKey(user._id)">🔑 Generate</button>
+            <div v-if="loading">Loading...</div>
+            <div v-else-if="users.length === 0">No eligible users found.</div>
+            <div v-else>
+                <div v-for="user in users" :key="user._id" class="user-entry">
+                    <span class="user-line">
+                        {{ user.firstName }} {{ user.lastName }} ({{ user.email }}) - {{ user.term }}
+                        <br v-if="user.apiKey">
+                        <small v-if="user.apiKey">Key: {{ user.apiKey }}</small>
+                    </span>
+                    <button @click="generateKey(user._id)">🔑 Generate</button>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <script>
+import { authFetch } from '@/authFetch.js';
+
 export default {
     data() {
         return {
-            users: []
+            users: [],
+            loading: true,
         }
     },
     mounted() {
@@ -30,13 +37,14 @@ export default {
     methods: {
         async fetchUsers() {
             try {
-                const res = await fetch("/api/users");
+                const res = await authFetch("/api/users");
+                if (!res.ok) throw new Error("Failed to fetch users");
                 const allUsers = await res.json();
-                const filtered = allUsers.filter(u => u.hasAccess);
+                const filtered = allUsers.filter(u => u.hasAccess || u.isAdmin);
                 
                 // Fetch keys for each user in parallel
                 for (const user of filtered) {
-                    const keyRes = await fetch(`/api/users/${user._id}/apikey`);
+                    const keyRes = await authFetch(`/api/users/${user._id}/apikey`);
                     if (keyRes.ok) {
                         const { api_key } = await keyRes.json();
                         user.apiKey = api_key;
@@ -46,6 +54,7 @@ export default {
                 }
 
                 this.users = filtered;
+                this.loading = false;
             } catch (err) {
                 console.error("Failed to load users or keys:", err);
             }
@@ -53,11 +62,13 @@ export default {
         async generateKey(userId) {
             if (!confirm("Generate new key for this user?")) return;
             try {
-                const res = await fetch(`/api/users/${userId}/apikey`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" }
+                const res = await authFetch(`/api/users/${userId}/apikey`, {
+                    method: "POST"
                 });
-                if (!res.ok) throw new Error("Key generation failed");
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Key generation failed");
+                }
 
                 const { api_key } = await res.json();
                 this.users = this.users.map(u =>
@@ -65,7 +76,7 @@ export default {
                 );
             } catch (err) {
                 console.error("Failed to generate key:", err);
-                alert("Could not generate key.");
+                alert("Could not generate key: " + err.message);
             }
         }
     }
@@ -102,6 +113,12 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 80%;
+}
+
+.user-line small {
+    display: block;
+    margin: 4px 0 0 0;
+    text-align: left;
 }
 
 #list {

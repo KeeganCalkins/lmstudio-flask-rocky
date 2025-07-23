@@ -2,7 +2,7 @@ import os
 import uuid
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 from bson import ObjectId
 from datetime import datetime
 
@@ -42,7 +42,6 @@ def remove_user(userID):
         "deleted_requests":   requests_deleted,
         "deleted_api_keys":   keys_deleted
     }
-
 """ 
 Helper functions for the remove user function
 """
@@ -52,6 +51,43 @@ def remove_access_requests_for_user(user_id):
 # delete api_keys for user
 def remove_api_keys_for_user(user_id):
     return db.APIkeys.delete_many({"userID": user_id}).deleted_count
+
+# sets a user's isAdmin true if already false
+def set_admin(userID, make_admin: bool = True):
+    """
+    Toggles isAdmin. When elevating set hasAccess = True.
+    """
+    if not isinstance(userID, ObjectId):
+        userID = ObjectId(userID)
+
+    set_fields = {"isAdmin": make_admin}
+    if make_admin:
+        set_fields["hasAccess"] = True
+
+    res = db.users.update_one({"_id": userID}, {"$set": set_fields})
+    if res.matched_count == 0:
+        raise ValueError("No user found with that ID")
+
+    return {"updated_count": res.modified_count, "isAdmin": make_admin}
+
+# remove user's access
+def revoke_access(userID):
+    if not isinstance(userID, ObjectId):
+        userID = ObjectId(userID)
+
+    user = db.users.find_one({"_id": userID}, {"hasAccess": 1})
+    if not user:
+        raise ValueError("No user found with that ID")
+
+    update_res = db.users.update_one({"_id": userID}, {"$set": {"hasAccess": False}})
+    keys_deleted = db.APIkeys.delete_many({"userID": userID}).deleted_count
+    reqs_deleted = db.accessRequests.delete_many({"userID": userID}).deleted_count
+
+    return {
+        "updated_count": update_res.modified_count,
+        "deleted_api_keys": keys_deleted,
+        "deleted_requests": reqs_deleted
+    }
 
 # add accessRequest with users' _id as userID and email
 def request_access(userID):

@@ -23,7 +23,7 @@ export default {
                 <button id="menuButton" @click="navigate"><b>User</b></button>
             </router-link>
             <router-link to="/" custom v-slot="{ navigate }">
-                <button id="menuButton" @click="navigate"><b>Log-In</b></button>
+                <button id="menuButton" @click="navigate"><b>Home</b></button>
             </router-link>
         </h1>
     </header>

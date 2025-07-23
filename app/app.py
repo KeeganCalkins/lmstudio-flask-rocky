@@ -5,11 +5,13 @@ from loginUtils import (
     deny_access,
     accept_access,
     generate_api_key,
-    remove_user
+    remove_user,
+    revoke_access,
+    set_admin
 )
 from chat import ChatRequest, ChatResponse
 from chatQueue import queueChat
-from authorizationUtils import validateKey
+from authorizationUtils import validateKey, to_oid, self_or_admin
 from loginUtils import db
 
 from bson import ObjectId
@@ -77,7 +79,7 @@ def list_access_requests():
                     "email": req["email"],
                     "firstName": user.get("firstName", ""),
                     "lastName": user.get("lastName", ""),
-                    "courseID": user.get("courseInfo", [{}])[0].get("courseID", "N/A")
+                    "courseInfo": user.get("courseInfo", [])
                 })
         return jsonify(result)
     except Exception as e:
@@ -124,26 +126,25 @@ def api_get_me():
 @app.route("/api/users", methods=["POST"])
 @token_required
 def api_register_user():
-    oid   = g.user_claims["oid"]
-    payload = request.get_json() or {}
-    email   = payload.get("email")
+    claims = g.user_claims
+    oid    = claims["oid"]
+    email  = claims.get("preferred_username") or claims.get("upn") or claims.get("email")
     if not email:
-        return jsonify({"error":"No email provided"}), 400
-    
-    user_json = payload
-    user_json.update({
-        "azureOID": oid,
-        "email":    email,
+        return jsonify({"error":"No email claim"}), 400
+
+    payload = request.get_json() or {}
+
+    user_json = {
+        "azureOID":  oid,
+        "email":     email,
+        "firstName": payload.get("firstName"),
+        "lastName":  payload.get("lastName"),
         "hasAccess": False,
         "isAdmin":   False,
-    })
-        
-    if not user_json.get("courseInfo"):
-        user_json["courseInfo"] = [{
-        "CRN":      "TBD",
-        "courseID": "TBD",
-        "term":     "TBD"
+        "courseInfo": payload.get("courseInfo") or [{
+            "CRN": "TBD", "courseID":"TBD", "term":"TBD"
         }]
+    }
         
     existing = db.users.find_one({"azureOID": oid})
     if existing:
@@ -177,8 +178,11 @@ def api_remove_user(user_id):
 @app.route("/api/users/<user_id>/access", methods=["POST"])
 @token_required
 def api_request_access(user_id):
+    allowed, _ = self_or_admin(user_id)
+    if not allowed:
+        return jsonify({"error":"Forbidden"}), 403
     try:
-        oid = ObjectId(user_id)
+        oid = to_oid(user_id)
         payload = request.get_json() or {}
         courses = payload.get("courses")
         
@@ -195,13 +199,67 @@ def api_request_access(user_id):
         return jsonify({"error": str(e)}), 400
     except PyMongoError as e:
         return jsonify({"error": "DB error: " + str(e)}), 500
+    
+def _sanitize_courses(courses):
+    clean = []
+    for c in courses:
+        try:
+            CRN  = str(c["CRN"])
+            cid  = str(c["courseID"])
+            term = str(c["term"])
+        except (KeyError, TypeError):
+            continue
+        clean.append({"CRN": CRN, "courseID": cid, "term": term})
+    return clean
+
+# toggle admin
+@app.route("/api/users/<user_id>/admin", methods=["POST", "DELETE"])
+@token_required
+@admin_required
+def api_admin_toggle(user_id):
+    try:
+        # Prevent an admin from removing their own admin status
+        if request.method == "DELETE":
+            me = db.users.find_one({"azureOID": g.user_claims["oid"]}, {"_id": 1})
+            if me and str(me["_id"]) == user_id:
+                return jsonify({"error": "You cannot remove your own admin status."}), 400
+
+        make_admin = request.method == "POST"
+        result = set_admin(user_id, make_admin)
+        return jsonify({"_id": user_id, **result}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except PyMongoError as e:
+        return jsonify({"error": "DB error: " + str(e)}), 500
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# Revoke access
+@app.route("/api/users/<user_id>/access/revoke", methods=["POST"])
+@token_required
+@admin_required
+def api_revoke_access(user_id):
+    try:
+        result = revoke_access(user_id)
+        return jsonify({"_id": user_id, **result}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except PyMongoError as e:
+        return jsonify({"error": "DB error: " + str(e)}), 500
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # Used to check if request is pending
 @app.route("/api/users/<user_id>/access/pending", methods=["GET"])
 @token_required
 def access_pending(user_id):
+    allowed, _ = self_or_admin(user_id)
+    if not allowed:
+        return jsonify({"error":"Forbidden"}), 403
     try:
-        oid = ObjectId(user_id)
+        oid = to_oid(user_id)
         # See if there is a request in the accessRequests collection
         pending = db.accessRequests.find_one({"userID": oid}) is not None
         return jsonify({"pending": pending}), 200
@@ -241,16 +299,16 @@ def api_accept_access(user_id):
 @app.route("/api/users/<user_id>/apikey", methods=["GET"])
 @token_required
 def get_api_key(user_id):
+    allowed, _ = self_or_admin(user_id)
+    if not allowed:
+        return jsonify({"error":"Forbidden"}), 403
     try:
-        oid = ObjectId(user_id)
-        key = db.APIkeys.find_one({ "userID": oid })
-        if not key:
-            return jsonify({ "api_key": None }), 200
-        return jsonify({ "api_key": str(key["_id"]) }), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        oid = to_oid(user_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    key = db.APIkeys.find_one({"userID": oid})
+    return jsonify({"api_key": str(key["_id"]) if key else None}), 200
 
 # Generate / rotate API key
 @app.route("/api/users/<user_id>/apikey", methods=["POST"])
@@ -329,10 +387,6 @@ def unauthorized(e):
 @app.errorhandler(403)
 def forbidden(e):
     return jsonify({"error":"Forbidden"}), 403
-
-@app.route("/api/hello")
-def hello():
-    return "🐶 hello from Flask", 200
 
 if __name__ == "__main__":
     app.run(debug=True)

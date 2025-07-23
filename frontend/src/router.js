@@ -4,8 +4,8 @@ import LandingPage from './views/LandingPage.vue'
 import FocusUser from './components/FocusUser.vue'
 import FocusAdmin from './components/FocusAdmin.vue'
 
-import { msalInstance } from './msalInstance.js'
-import { authFetch } from '@/authFetch.js'
+import { useUserStore } from '@/stores/userStores'
+import { pinia } from '@/pinia'
 
 const routes = [
     {
@@ -21,7 +21,7 @@ const routes = [
     {
         path: '/admin',
         component: Main,
-        meta: { requiresAuth: true, adminRequired: true },
+        meta: { requiresAuth: true, requiresAdmin: true },
         children: [{ path: '', component: FocusAdmin }]
     }
 ]
@@ -32,23 +32,24 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
-    if (to.meta.requiresAuth) {
-        const accounts = msalInstance.getAllAccounts();
-        if (!accounts.length) {
-            return next({ path: '/' })
+    const store = useUserStore(pinia)
+    if (!store.loaded) {
+        await store.init()
+    }
+
+    const needsAuth  = to.matched.some(r => r.meta.requiresAuth)
+    const needsAdmin = to.matched.some(r => r.meta.requiresAdmin)
+
+    if (needsAuth && !store.isAuthed) {
+        return next('/')
+    }
+
+    if (needsAdmin) {
+        await store.refreshMe()
+        if (!store.isAdmin) {
+            return next('/user')
         }
     }
 
-    if (to.meta.adminRequired) {
-        try {
-            const res = await authFetch('/api/me')
-            const me  = await res.json()
-            if (!me.isAdmin) {
-                return next({ path: '/user' })
-            }
-        } catch (err) {
-            return next({ path: '/' })
-        }
-    }
     next();
 })

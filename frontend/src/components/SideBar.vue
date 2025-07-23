@@ -1,6 +1,6 @@
 <template>
     <div id="bar">
-        <h3 style="margin-left: 1rem; color: goldenrod">Manage</h3>
+        <h3 style="margin-left: 1.5rem; color: goldenrod">Manage</h3>
         <button id="menuButton" @click="menuMode.setMode('ManUser')">
             Users
         </button>
@@ -28,7 +28,7 @@ import {menuMode} from "../stores/menuMode.js"
 #bar {
     float: left;
     height: 400px;
-    width: 100px;
+    width: 110px;
     background: #003976;
     border-top-right-radius: 20px;
     border-bottom-right-radius: 20px;
@@ -37,7 +37,7 @@ import {menuMode} from "../stores/menuMode.js"
 
 #menuButton {
     height: 50px;
-    width: 50px;
+    width: 70px;
     border-radius: 10px;
     color: #efab00;
     background: #003976;

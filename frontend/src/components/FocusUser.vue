@@ -86,8 +86,18 @@ export default {
             ]
         }
     },
+    watch: {
+        termOptions: {
+            immediate: true,
+            handler(opts) {
+                const cur = opts[1];
+                this.courses.forEach(c => { if (!c.term) c.term = cur; });
+            }
+        }
+    },
     async mounted() {
         await this.store.init()
+        this.courses.forEach(c => { if (!c.term) c.term = this.currentTerm; });
     },
     computed: {
         loading()    { return !this.store.loaded },

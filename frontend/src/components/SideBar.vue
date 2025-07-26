@@ -10,6 +10,9 @@
         <button id="menuButton" @click="menuMode.setMode('ManRequests')">
             Requests
         </button>
+        <button id="menuButton" @click="menuMode.setMode('ManHistory')">
+            History
+        </button>
     </div>
 </template>
 
@@ -27,7 +30,7 @@ import {menuMode} from "../stores/menuMode.js"
 <style scoped>
 #bar {
     float: left;
-    height: 400px;
+    height: 425px;
     width: 110px;
     background: #003976;
     border-top-right-radius: 20px;

@@ -87,6 +87,32 @@ def list_access_requests():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# return users' history list
+@app.route("/api/history", methods=["GET"])
+@token_required
+@admin_required
+def list_history():
+    try:
+        docs = db.studentHistory.find({})
+        result = []
+        for doc in docs:
+            # build one combined courseInfo array
+            courses = []
+            for entry in doc.get("history", []):
+                courses.extend(entry.get("courseInfo", []))
+            result.append({
+                "_id":        str(doc["_id"]),
+                "userID":     str(doc["userID"]),
+                "email":      doc["email"],
+                "firstName":  doc.get("firstName"),
+                "lastName":   doc.get("lastName"),
+                "courseInfo": courses
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error("Failed to list history: %s", e)
+        return jsonify({"error": str(e)}), 500
+
 # Get user info
 @app.route("/api/users/<user_id>", methods=["GET"])
 @token_required
@@ -304,6 +330,12 @@ def get_api_key(user_id):
         return jsonify({"error":"Forbidden"}), 403
     try:
         oid = to_oid(user_id)
+        target = db.users.find_one(
+            {"_id": oid},
+            {"hasAccess":1, "isAdmin":1}
+        )
+        if not (target and (target.get("hasAccess") or target.get("isAdmin"))):
+            return jsonify({"error":"You do not have access"}), 403
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -319,13 +351,21 @@ def api_generate_api_key(user_id):
     me = db.users.find_one({ "azureOID": oid }, {"_id":1, "isAdmin":1})
     if not me:
         return jsonify({"error":"User not found"}), 404
-    if not (me.get("isAdmin") or str(me["_id"]) == user_id):
+    is_self = str(me["_id"]) == user_id
+    if not (me.get("isAdmin") or is_self):
         return jsonify({"error":"Forbidden"}), 403
     
     try:
         target_oid = ObjectId(user_id)
     except:
         return jsonify({"error":"Invalid user_id"}), 400
+    
+    target = db.users.find_one(
+        {"_id": target_oid},
+        {"hasAccess":1, "isAdmin":1}
+    )
+    if not (target and (target.get("hasAccess") or target.get("isAdmin"))):
+        return jsonify({"error":"You do not have access"}), 403
     
     try:
         new_key = generate_api_key(target_oid)

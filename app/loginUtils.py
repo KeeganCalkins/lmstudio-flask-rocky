@@ -52,17 +52,16 @@ def remove_access_requests_for_user(user_id):
 def remove_api_keys_for_user(user_id):
     return db.APIkeys.delete_many({"userID": user_id}).deleted_count
 
-# sets a user's isAdmin true if already false
+# Toggles isAdmin
 def set_admin(userID, make_admin: bool = True):
-    """
-    Toggles isAdmin. When elevating set hasAccess = True.
-    """
     if not isinstance(userID, ObjectId):
         userID = ObjectId(userID)
 
     set_fields = {"isAdmin": make_admin}
     if make_admin:
         set_fields["hasAccess"] = True
+    else:
+        db.APIkeys.delete_many({"userID": userID}).deleted_count
 
     res = db.users.update_one({"_id": userID}, {"$set": set_fields})
     if res.matched_count == 0:
@@ -139,6 +138,32 @@ def accept_access(userID):
     )
     if update_result.matched_count == 0:
         raise ValueError("No user found with that ID")
+    
+    # add accepted user to student history
+    user = db.users.find_one(
+        { "_id": userID },
+        { "email":1, "firstName":1, "lastName":1, "courseInfo":1 }
+    )
+    db.studentHistory.update_one(
+        { "userID": userID },
+        {
+            "$setOnInsert": {
+                "userID":    userID,
+                "email":     user["email"],
+                "firstName": user.get("firstName"),
+                "lastName":  user.get("lastName")
+            },
+            # always push courses into an array and recent accept time
+            "$push": {
+                "history": {
+                    "courseInfo": user.get("courseInfo", []),
+                    "acceptedOn": datetime.utcnow()
+                }
+            }
+        },
+        upsert=True
+    )
+    
     delete_result = db.accessRequests.delete_one({ "userID": userID })
     
     return {
@@ -241,10 +266,12 @@ if __name__ == "__main__":
             users_result    = db.users.delete_many({})
             requests_result = db.accessRequests.delete_many({})
             keys_result = db.APIkeys.delete_many({})
+            SH_result = db.studentHistory.delete_many({})
 
             print(f"  • Deleted {users_result.deleted_count} user documents")
             print(f"  • Deleted {requests_result.deleted_count} access request documents")
             print(f"  • Deleted {keys_result.deleted_count} API keys")
+            print(f"  • Deleted {SH_result.deleted_count} history documents")
         
         elif choice == "6":
             print("attempting to remove user...")

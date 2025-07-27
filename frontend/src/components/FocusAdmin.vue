@@ -2,12 +2,14 @@
 import ManUser from "./ManUser.vue"
 import ManKey from "./ManKey.vue"
 import ManRequests from "./ManRequests.vue"
+import ManHistory from "./ManHistory.vue"
 import {menuMode} from "../stores/menuMode.js"
     export default {
         components: {
             ManUser,
             ManKey,
-            ManRequests
+            ManRequests,
+            ManHistory
         },
         computed: {
             menuMode() {

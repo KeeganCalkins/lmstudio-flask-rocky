@@ -48,17 +48,26 @@ export const useUserStore = defineStore('user', {
         },
 
         async refreshMe() {
-            const res = await authFetch('/api/me')
-            if (!res.ok) {
-                this.$reset()
-                return
+            let me = null
+            let ok = false
+            try {
+                const res = await authFetch('/api/me')
+                ok = res.ok
+                if (ok) {
+                    me = await res.json()
+                }
+            } catch (e) {
+                console.log('refreshMe: not authenticated or token failed', e)
             }
-            const me = await res.json()
-            this._id        = me._id
-            this.email      = me.email
-            this.hasAccess  = me.hasAccess
-            this.isAdmin    = me.isAdmin
-            this.courseInfo = me.courseInfo || []
+            if (ok && me) {
+                // populate store from the returned me object
+                this.setMe(me)
+            } else {
+                // clear out any user data
+                this.$reset()
+            }
+            // mark that we've done our one-time load
+            this.loaded = true
         },
 
         async refreshPending() {

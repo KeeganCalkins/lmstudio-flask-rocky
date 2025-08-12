@@ -20,24 +20,18 @@ def token_required(f):
         try:
             jwk_client   = PyJWKClient(JWKS_URL)
             signing_key  = jwk_client.get_signing_key_from_jwt(token).key
-            valid_issuers = [
-                f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
-                f"https://sts.windows.net/{TENANT_ID}/",
-            ]
-            #current_app.logger.info("Accepting issuers: %s", valid_issuers)
+            
             claims = jwt.decode(
                 token,
                 signing_key,
                 algorithms=["RS256"],
                 audience=CLIENT_ID,
-                options={ "verify_iss": False }
+                issuer=f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
             )
-            # manually enforce issuer
-            iss = claims.get("iss")
-            if iss not in valid_issuers:
-                current_app.logger.error("Rejected token issuer: %s", iss)
-                return jsonify({"msg":"Invalid token","error":"Invalid issuer"}), 401
+            
             g.user_claims = claims
+        except jwt.ExpiredSignatureError:
+            return jsonify({"msg":"Token expired"}), 401
         except Exception as e:
             current_app.logger.error("JWT decode failed: %s", e)
             return jsonify({"msg":"Invalid token","error":str(e)}), 401

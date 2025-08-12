@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "rm -rf /var/www/rocky.cs.kent.edu/html/* && cp -r dist/* /var/www/rocky.cs.kent.edu/html/"
   },
   "dependencies": {
     "@azure/msal-browser": "^4.15.0",

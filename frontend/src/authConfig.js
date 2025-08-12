@@ -14,6 +14,6 @@ export const loginRequest = {
     scopes: [
         "openid",
         "profile",
-        import.meta.env.VITE_API_SCOPE
+        "offline_access"
     ]
 };
